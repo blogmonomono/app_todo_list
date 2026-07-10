@@ -357,7 +357,7 @@ function rowToObj(r){
 }
 
 tokenClient=google.accounts.oauth2.initTokenClient({client_id:GOOGLE_CLIENT_ID,scope:SCOPES,callback:function(){}});
-$id('loginBtn').disabled=false; $id('loginBtn').textContent='Googleでログイン';
+attemptAutoLogin();
 
 function ensureToken(){
   if(accessToken&&Date.now()<tokenExpiresAt-60000) return Promise.resolve(accessToken);
@@ -888,16 +888,31 @@ document.addEventListener('mouseup',function(){
 });
 
 /* ログイン */
-$id('loginBtn').onclick=function(){
-  var btn=$id('loginBtn'), status=$id('loginStatus');
-  btn.disabled=true; btn.textContent='ログイン中…'; status.textContent=''; status.className='login-status';
-  ensureToken().then(fetchUserEmail).then(ensureSpreadsheet).then(function(){
+function proceedLogin(){
+  return ensureToken().then(fetchUserEmail).then(ensureSpreadsheet).then(function(){
     $id('loginGate').hidden=true;
     $id('userBadge').hidden=false; $id('userBadge').textContent=userEmail;
     $id('menuLogout').hidden=false;
     $count.textContent='読み込み中…';
     sync(function(){ return run('getTodos'); });
-  }).catch(function(e){
+  });
+}
+function withTimeout(promise,ms){
+  return new Promise(function(resolve,reject){
+    var timer=setTimeout(function(){ reject(new Error('timeout')); },ms);
+    promise.then(function(v){ clearTimeout(timer); resolve(v); },function(e){ clearTimeout(timer); reject(e); });
+  });
+}
+function attemptAutoLogin(){
+  withTimeout(proceedLogin(),6000).catch(function(){
+    var btn=$id('loginBtn');
+    btn.disabled=false; btn.textContent='Googleでログイン';
+  });
+}
+$id('loginBtn').onclick=function(){
+  var btn=$id('loginBtn'), status=$id('loginStatus');
+  btn.disabled=true; btn.textContent='ログイン中…'; status.textContent=''; status.className='login-status';
+  proceedLogin().catch(function(e){
     btn.disabled=false; btn.textContent='Googleでログイン';
     status.textContent='ログインに失敗しました: '+((e&&e.message)||'もう一度お試しください');
     status.className='login-status err';
