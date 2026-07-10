@@ -240,8 +240,8 @@
 <div class="login-gate" id="loginGate">
   <div class="login-card">
     <h2>タスク整理くん</h2>
-    <p>Googleアカウントでログインすると、あなた専用のスプレッドシートにタスクを保存するよ。</p>
-    <p>このアプリが読み書きするのは、ログイン時に自動で作られる専用のスプレッドシートだけ。ほかのファイルやメールなどの情報には一切アクセスしないよ。データはあなた自身のGoogleドライブに保存されるから、開発者を含めて他の人が見ることはできないから安心してね。</p>
+    <p>Googleアカウントでログインすると、あなた専用のスプレッドシートにタスクを保存します。</p>
+    <p>このアプリが読み書きするのは、ログイン時に自動で作られる専用のスプレッドシートだけです。ほかのファイルやメールなどの情報には一切アクセスしません。データはあなた自身のGoogleドライブに保存されるため、開発者を含めて他の人が見ることはできませんので、安心してご利用ください。</p>
     <button class="login-btn" id="loginBtn" disabled>読み込み中…</button>
     <div class="login-status" id="loginStatus"></div>
   </div>
@@ -265,7 +265,7 @@
   </div>
   <main>
     <ul id="list"></ul>
-    <div class="empty" id="empty" hidden>タスクを追加して始めよう</div>
+    <div class="empty" id="empty" hidden>タスクを追加して始めましょう</div>
   </main>
 </div>
 
@@ -816,7 +816,7 @@ function renderList(){
     order.forEach(function(k){ var hdr=document.createElement('li'); hdr.className='group-hdr'; hdr.setAttribute('role','presentation'); var lbl=document.createElement('span'); lbl.className='ghdr-label'; lbl.textContent=k||'未分類'; hdr.appendChild(lbl); $list.appendChild(hdr); groups[k].forEach(function(t){ $list.appendChild(rowEl(t,canDrag)); }); });
   } else { rows.forEach(function(t){ $list.appendChild(rowEl(t,canDrag)); }); }
   $empty.hidden=rows.length>0;
-  if(rows.length===0) $empty.textContent=todos.length===0?'タスクを追加して始めよう':(filter==='done'?'完了したタスクはまだないよ':'未完了のタスクはなし。お疲れさま');
+  if(rows.length===0) $empty.textContent=todos.length===0?'タスクを追加して始めましょう':(filter==='done'?'完了したタスクはまだありません':'未完了のタスクはありません。お疲れ様でした');
   $clearDone.hidden=todos.filter(function(t){ return t.done; }).length===0;
   updateCatChips();
 }
@@ -899,7 +899,7 @@ $id('loginBtn').onclick=function(){
     sync(function(){ return run('getTodos'); });
   }).catch(function(e){
     btn.disabled=false; btn.textContent='Googleでログイン';
-    status.textContent='ログインに失敗したよ: '+((e&&e.message)||'もう一度試してみて');
+    status.textContent='ログインに失敗しました: '+((e&&e.message)||'もう一度お試しください');
     status.className='login-status err';
   });
 };
