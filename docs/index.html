@@ -359,12 +359,28 @@ function rowToObj(r){
 tokenClient=google.accounts.oauth2.initTokenClient({client_id:GOOGLE_CLIENT_ID,scope:SCOPES,callback:function(){}});
 attemptAutoLogin();
 
+var TOKEN_CACHE_KEY='tsk_token_cache';
+function saveTokenCache(){
+  try{ localStorage.setItem(TOKEN_CACHE_KEY,JSON.stringify({token:accessToken,expiresAt:tokenExpiresAt})); }catch(e){}
+}
+function loadTokenCache(){
+  try{
+    var raw=localStorage.getItem(TOKEN_CACHE_KEY); if(!raw) return;
+    var c=JSON.parse(raw);
+    if(c&&c.token&&c.expiresAt&&Date.now()<c.expiresAt-60000){ accessToken=c.token; tokenExpiresAt=c.expiresAt; }
+  }catch(e){}
+}
+function clearTokenCache(){ try{ localStorage.removeItem(TOKEN_CACHE_KEY); }catch(e){} }
+
 function ensureToken(){
+  if(accessToken&&Date.now()<tokenExpiresAt-60000) return Promise.resolve(accessToken);
+  loadTokenCache();
   if(accessToken&&Date.now()<tokenExpiresAt-60000) return Promise.resolve(accessToken);
   return new Promise(function(resolve,reject){
     tokenClient.callback=function(resp){
       if(resp.error){ reject(new Error(resp.error)); return; }
       accessToken=resp.access_token; tokenExpiresAt=Date.now()+(resp.expires_in||3600)*1000;
+      saveTokenCache();
       resolve(accessToken);
     };
     tokenClient.requestAccessToken({prompt:''});
@@ -920,6 +936,7 @@ $id('loginBtn').onclick=function(){
 };
 $id('menuLogout').onclick=function(){
   if(accessToken) google.accounts.oauth2.revoke(accessToken,function(){});
+  clearTokenCache();
   location.reload();
 };
 </script>
