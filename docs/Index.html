@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<title>タスク整理くん</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="タスク整理くん">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<style>
+  :root {
+    --bg:#0b0c10; --surface:#16171d; --surface-2:#1f2129;
+    --line:rgba(255,255,255,.08); --text:#eceef2; --muted:#8f95a3;
+    --color-b:#4a8de8; --color-r:#f2586d; --color-g:#22b68d; --color-y:#f5a623;
+    --accent:#4a8de8; --accent-strong:#2f6fd0; --danger:#f2586d;
+    --accent-soft:rgba(74,141,232,.12); --accent-brd:rgba(74,141,232,.45);
+    --done:#565b68; --p-high:#f2586d; --p-mid:#f5a623; --p-low:#22b68d;
+    --due-over:#f2586d; --due-today:#f5a623; --radius:16px; --tap:44px;
+    --shadow-1:0 1px 2px rgba(0,0,0,.4); --shadow-2:0 12px 32px rgba(0,0,0,.45);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  [hidden]{display:none!important;}
+  html,body{margin:0;height:100%;}
+  body{color:var(--text);
+    background:radial-gradient(1100px 520px at 80% -10%,rgba(74,141,232,.10),transparent 60%),
+               radial-gradient(900px 500px at -10% 110%,rgba(34,182,141,.06),transparent 55%),var(--bg);
+    background-attachment:fixed;
+    font-family:system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;
+    font-size:16px;line-height:1.5;display:flex;flex-direction:column;min-height:100dvh;}
+  ::-webkit-scrollbar{width:10px;height:10px;}
+  ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:99px;border:3px solid transparent;background-clip:padding-box;}
+  ::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.26);border:3px solid transparent;background-clip:padding-box;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  header{position:sticky;top:0;z-index:5;
+    padding:calc(env(safe-area-inset-top) + 14px) 20px 12px;
+    background:rgba(11,12,16,.8);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+    border-bottom:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;gap:12px;}
+  h1{margin:0;font-size:20px;font-weight:800;letter-spacing:-.02em;
+    background:linear-gradient(92deg,#ffffff,#aebedd);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .count{color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums;}
+  .view-btn{border:1px solid var(--line);background:var(--surface);color:var(--muted);
+    font-size:13px;font-weight:600;padding:7px 14px;border-radius:99px;cursor:pointer;
+    transition:color .15s,border-color .15s,background .15s;}
+  .view-btn.active{color:var(--accent);border-color:var(--accent-brd);background:var(--accent-soft);}
+  /* カンバン */
+  .kanban-wrap{flex:1;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;gap:44px;padding:18px 16px 40px;}
+  .kanban-board-title{font-size:17px;font-weight:800;letter-spacing:.02em;color:var(--text);padding:4px 0 10px;display:flex;align-items:center;gap:10px;}
+  .kanban-board-title::after{content:'';flex:1;height:1px;background:var(--line);}
+  .kanban-cols{overflow-x:auto;overflow-y:hidden;display:flex;gap:14px;padding-bottom:8px;}
+  .kanban-col{flex:0 0 min(340px,84vw);background:rgba(255,255,255,.025);border:1px solid var(--line);border-top:3px solid var(--muted);border-radius:var(--radius);padding:12px;display:flex;flex-direction:column;gap:8px;transition:border-color .15s,background .15s,box-shadow .15s;}
+  .kanban-col[data-col="todo"] {border-top-color:var(--color-b);}
+  .kanban-col[data-col="doing"]{border-top-color:var(--color-y);}
+  .kanban-col[data-col="done"] {border-top-color:var(--color-g);}
+  .kanban-col[data-col="todo"]  .kanban-col-hdr{color:var(--color-b);}
+  .kanban-col[data-col="doing"] .kanban-col-hdr{color:var(--color-y);}
+  .kanban-col[data-col="done"]  .kanban-col-hdr{color:var(--color-g);}
+  .kanban-col.col-over{border-color:var(--accent);background:var(--accent-soft);box-shadow:inset 0 0 0 1px var(--accent-brd);}
+  .board-title-label{cursor:pointer;border-radius:6px;padding:0 6px;margin:0 -6px;transition:background .15s;}
+  .board-title-label:hover{background:rgba(255,255,255,.07);}
+  .board-title-input{font:inherit;font-size:inherit;font-weight:inherit;letter-spacing:inherit;color:var(--text);background:var(--surface-2);border:1px solid var(--accent);border-radius:8px;padding:2px 8px;outline:none;min-width:80px;max-width:260px;}
+  .board-handle{cursor:grab;color:var(--muted);font-size:16px;opacity:.35;flex-shrink:0;line-height:1;padding:0 2px;transition:opacity .15s;}
+  .kanban-board-title:hover .board-handle{opacity:.85;}
+  .kanban-board.board-drag-over{outline:2px dashed var(--accent-brd);border-radius:var(--radius);outline-offset:6px;}
+  .board-del-btn{background:none;border:1px solid transparent;color:var(--muted);cursor:pointer;font-size:12px;padding:2px 8px;border-radius:6px;transition:color .15s,border-color .15s;flex-shrink:0;}
+  .board-del-btn:hover{color:var(--danger);border-color:rgba(242,88,109,.4);}
+  .kanban-col-hdr{font-size:11px;font-weight:800;letter-spacing:.12em;color:var(--muted);padding:2px 2px 10px;display:flex;align-items:center;gap:8px;flex-shrink:0;border-bottom:1px solid var(--line);}
+  .kanban-col-hdr::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor;box-shadow:0 0 8px currentColor;flex-shrink:0;}
+  .kcnt{font-size:11px;font-variant-numeric:tabular-nums;background:rgba(255,255,255,.06);color:var(--muted);border-radius:99px;padding:1px 8px;margin-left:auto;}
+  .kcards{display:flex;flex-direction:column;gap:8px;min-height:32px;}
+  .kcard{background:var(--surface);border:1px solid var(--line);border-left:3px solid transparent;border-radius:12px;padding:11px 13px;display:flex;flex-direction:column;gap:6px;cursor:pointer;box-shadow:var(--shadow-1);transition:transform .12s,border-color .15s,background .15s,box-shadow .15s,opacity .15s;user-select:none;-webkit-user-select:none;}
+  .kcard:hover{transform:translateY(-1px);border-color:var(--accent-brd);background:var(--surface-2);box-shadow:0 6px 18px rgba(0,0,0,.4);}
+  .kcard.prio-1{border-left-color:var(--p-high);} .kcard.prio-2{border-left-color:var(--p-mid);} .kcard.prio-3{border-left-color:var(--p-low);}
+  .kcard.k-dragging{opacity:.3;cursor:grabbing;transform:none;}
+  @keyframes kflash-todo  {0%{box-shadow:0 0 0 3px rgba(74,141,232,.9),0 0 12px rgba(74,141,232,.5)}70%{box-shadow:0 0 0 10px rgba(74,141,232,0),0 0 24px rgba(74,141,232,0)}100%{box-shadow:none}}
+  @keyframes kflash-doing {0%{box-shadow:0 0 0 3px rgba(245,166,35,.9),0 0 12px rgba(245,166,35,.5)}70%{box-shadow:0 0 0 10px rgba(245,166,35,0),0 0 24px rgba(245,166,35,0)}100%{box-shadow:none}}
+  @keyframes kflash-done  {0%{box-shadow:0 0 0 3px rgba(34,182,141,.9),0 0 12px rgba(34,182,141,.5)}70%{box-shadow:0 0 0 10px rgba(34,182,141,0),0 0 24px rgba(34,182,141,0)}100%{box-shadow:none}}
+  .kcard.flash-todo  {animation:kflash-todo  1s ease-out;}
+  .kcard.flash-doing {animation:kflash-doing 1s ease-out;}
+  .kcard.flash-done  {animation:kflash-done  1s ease-out;}
+  .kcard.k-drop-before{border-top:2px solid var(--accent);}
+  .kcard.k-drop-after{border-bottom:2px solid var(--accent);}
+  .ktext{font-size:15px;word-break:break-word;line-height:1.45;}
+  .kmeta{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+  .kprio{font-size:12px;font-weight:700;}
+  .kprio.p1{color:var(--p-high);} .kprio.p2{color:var(--p-mid);} .kprio.p3{color:var(--p-low);}
+  .kdue{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;} .kdue.over{color:var(--due-over);} .kdue.today{color:var(--due-today);}
+  .kcat{font-size:12px;color:var(--accent);}
+  .kmemo-p{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .kadd-btn{width:100%;padding:8px;font-size:12px;color:var(--muted);background:none;border:1px dashed rgba(255,255,255,.12);border-radius:10px;cursor:pointer;transition:color .15s,border-color .15s,background .15s;margin-top:2px;}
+  .kadd-btn:hover{color:var(--text);border-color:var(--accent-brd);background:var(--accent-soft);}
+  .kadd-input{width:100%;font:inherit;font-size:13px;color:var(--text);background:var(--surface-2);border:1px solid var(--accent);border-radius:10px;padding:8px 10px;outline:none;margin-top:6px;}
+  .add-board-wrap{padding:8px 0 4px;}
+  .add-board-btn{display:flex;align-items:center;gap:8px;padding:12px 16px;font-size:13px;color:var(--muted);background:none;border:1px dashed rgba(255,255,255,.14);border-radius:var(--radius);cursor:pointer;width:100%;transition:color .15s,border-color .15s,background .15s;}
+  .add-board-btn:hover{color:var(--text);border-color:var(--accent-brd);background:var(--accent-soft);}
+  .add-board-input{font:inherit;font-size:14px;color:var(--text);background:var(--surface-2);border:1px solid var(--accent);border-radius:12px;padding:10px 14px;outline:none;width:100%;}
+  /* モーダル */
+  .modal-overlay{position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.6);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s;}
+  .modal-overlay.open{opacity:1;pointer-events:all;}
+  .modal{background:var(--surface);border:1px solid rgba(255,255,255,.1);border-radius:20px;box-shadow:var(--shadow-2);width:min(480px,92vw);max-height:85dvh;overflow-y:auto;display:flex;flex-direction:column;transform:translateY(12px) scale(.98);transition:transform .22s cubic-bezier(.2,.8,.2,1);}
+  .modal-overlay.open .modal{transform:none;}
+  .modal-hdr{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--line);font-size:14px;font-weight:700;flex-shrink:0;}
+  .modal-close{width:32px;height:32px;border:none;background:none;color:var(--muted);font-size:16px;cursor:pointer;border-radius:8px;transition:color .15s,background .15s;}
+  .modal-close:hover{color:var(--text);background:var(--surface-2);}
+  .modal-body{padding:20px;display:flex;flex-direction:column;gap:16px;}
+  .m-field{display:flex;flex-direction:column;gap:6px;}
+  .m-label{font-size:11px;color:var(--muted);font-weight:700;letter-spacing:.08em;}
+  .m-ta,.m-inp{font:inherit;font-size:14px;color:var(--text);background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;outline:none;transition:border-color .15s,box-shadow .15s;}
+  .m-ta{resize:vertical;min-height:68px;}
+  .m-ta:focus,.m-inp:focus{border-color:var(--accent-brd);box-shadow:0 0 0 3px var(--accent-soft);}
+  .m-date{font:inherit;font-size:14px;color:var(--muted);background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;outline:none;color-scheme:dark;}
+  .m-date.set{color:var(--text);} .m-date.today{color:var(--due-today);} .m-date.over{color:var(--due-over);}
+  .prio-btns,.status-btns{display:flex;gap:8px;}
+  .prio-btn,.status-btn{flex:1;padding:9px;font-size:12px;font-weight:600;border:1px solid var(--line);background:var(--surface-2);border-radius:10px;cursor:pointer;color:var(--muted);transition:color .15s,border-color .15s,background .15s;}
+  .prio-btn.sel-0{color:var(--text);border-color:var(--muted);background:rgba(255,255,255,.06);}
+  .prio-btn.sel-1{color:var(--p-high);border-color:rgba(242,88,109,.5);background:rgba(242,88,109,.12);}
+  .prio-btn.sel-2{color:var(--p-mid);border-color:rgba(245,166,35,.5);background:rgba(245,166,35,.12);}
+  .prio-btn.sel-3{color:var(--p-low);border-color:rgba(34,182,141,.5);background:rgba(34,182,141,.12);}
+  .status-btn.sel{color:var(--accent);border-color:var(--accent-brd);background:var(--accent-soft);}
+  .modal-foot{display:flex;gap:10px;padding:16px 20px;border-top:1px solid var(--line);flex-shrink:0;}
+  .m-del{padding:10px 16px;border:1px solid rgba(242,88,109,.4);background:none;color:var(--danger);border-radius:12px;font-size:13px;cursor:pointer;transition:background .15s;}
+  .m-del:hover{background:rgba(242,88,109,.12);}
+  .m-save{flex:1;padding:10px 16px;border:none;background:linear-gradient(180deg,var(--accent),var(--accent-strong));color:#fff;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 10px rgba(74,141,232,.3);transition:filter .15s,box-shadow .15s;}
+  .m-save:hover{filter:brightness(1.08);box-shadow:0 4px 16px rgba(74,141,232,.4);}
+  /* リストビュー */
+  #listView{display:flex;flex-direction:column;flex:1;}
+  .filters{display:flex;gap:8px;padding:16px 20px 8px;flex-wrap:wrap;align-items:center;}
+  .chip{appearance:none;border:1px solid var(--line);background:var(--surface);color:var(--muted);font-size:13px;padding:7px 14px;border-radius:999px;cursor:pointer;transition:color .15s,background .15s,border-color .15s;}
+  .chip[aria-pressed="true"]{color:var(--accent);background:var(--accent-soft);border-color:var(--accent-brd);}
+  .chip-clear{margin-left:auto;border:none;background:none;color:var(--muted);font-size:13px;cursor:pointer;padding:7px 4px;}
+  .chip-clear:hover{color:var(--danger);}
+  .sort-bar{display:flex;gap:6px;padding:0 20px 10px;align-items:center;flex-wrap:wrap;}
+  .sort-label{font-size:12px;color:var(--muted);margin-right:2px;flex:none;}
+  .chip-sort{appearance:none;border:1px solid var(--line);background:var(--surface);color:var(--muted);font-size:12px;padding:5px 12px;border-radius:999px;cursor:pointer;transition:color .15s,background .15s,border-color .15s;}
+  .chip-sort[aria-pressed="true"]{color:var(--accent);background:var(--accent-soft);border-color:var(--accent-brd);}
+  main{flex:1;overflow-y:auto;padding:4px 16px 40px;}
+  ul{list-style:none;margin:0;padding:0;}
+  li{position:relative;display:flex;align-items:flex-start;gap:12px;background:var(--surface);border:1px solid var(--line);border-left:3px solid transparent;border-radius:var(--radius);padding:12px 10px 12px 14px;margin:10px 0;box-shadow:var(--shadow-1);transition:border-color .15s;animation:pop .18s ease;}
+  li:hover{border-color:rgba(255,255,255,.16);}
+  li.prio-1{border-left-color:var(--p-high);} li.prio-2{border-left-color:var(--p-mid);} li.prio-3{border-left-color:var(--p-low);}
+  @keyframes pop{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  li.leaving{opacity:0;transform:translateY(-4px);transition:opacity .15s,transform .15s;}
+  .drag-handle{flex:none;width:18px;cursor:grab;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:15px;opacity:0;transition:opacity .15s;margin-left:-6px;user-select:none;-webkit-user-select:none;}
+  li:hover .drag-handle{opacity:.55;}
+  li.dragging{opacity:.35;background:var(--surface-2);}
+  li.drag-over-before{border-top:2px solid var(--accent);}
+  li.drag-over-after{border-bottom:2px solid var(--accent);}
+  .check{flex:none;width:24px;height:24px;margin-top:2px;border-radius:50%;border:2px solid var(--done);background:transparent;cursor:pointer;display:grid;place-items:center;transition:border-color .15s,background .15s;}
+  .check svg{width:14px;height:14px;opacity:0;transform:scale(.6);transition:.15s;}
+  li.done .check{border-color:var(--accent-strong);background:var(--accent-strong);}
+  li.done .check svg{opacity:1;transform:none;}
+  .body{flex:1;min-width:0;display:flex;flex-direction:column;gap:7px;}
+  .text{cursor:text;padding:2px 0;word-break:break-word;transition:color .15s;}
+  li.done .text{color:var(--done);text-decoration:line-through;}
+  .text-edit{font:inherit;color:var(--text);background:var(--surface-2);border:1px solid var(--accent);border-radius:8px;padding:6px 8px;outline:none;width:100%;}
+  .meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .prio{min-width:28px;height:28px;padding:0 8px;border:1px solid var(--line);background:var(--surface-2);color:var(--muted);border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;transition:color .15s,border-color .15s;}
+  .prio.p1{color:var(--p-high);border-color:rgba(242,88,109,.45);} .prio.p2{color:var(--p-mid);border-color:rgba(245,166,35,.45);} .prio.p3{color:var(--p-low);border-color:rgba(34,182,141,.45);}
+  .due-input{height:28px;padding:0 8px;font:inherit;font-size:12px;font-weight:600;color:var(--muted);background:var(--surface-2);border:1px solid var(--line);border-radius:8px;cursor:pointer;color-scheme:dark;}
+  .due-input.set{color:var(--text);} .due-input.today{color:var(--due-today);border-color:rgba(245,166,35,.5);} .due-input.over{color:var(--due-over);border-color:rgba(242,88,109,.5);}
+  li.done .due-input{color:var(--muted);border-color:var(--line);}
+  .due-clear{width:28px;height:28px;border:none;background:none;color:var(--muted);font-size:13px;cursor:pointer;border-radius:8px;margin-left:-4px;}
+  .due-clear:hover{color:var(--danger);}
+  .cat-tag{height:22px;padding:0 8px;border:1px solid var(--accent-brd);background:var(--accent-soft);color:var(--accent);border-radius:99px;cursor:pointer;font-size:11px;font-weight:600;white-space:nowrap;transition:background .15s;}
+  .cat-tag:hover{background:rgba(74,141,232,.22);}
+  .cat-tag.empty{background:none;border-color:var(--line);color:var(--muted);font-weight:400;}
+  .cat-tag.empty:hover{color:var(--text);border-color:var(--muted);}
+  .cat-input{height:22px;padding:0 8px;font:inherit;font-size:11px;font-weight:600;color:var(--text);background:var(--surface-2);border:1px solid var(--accent);border-radius:6px;outline:none;min-width:80px;max-width:140px;}
+  .memo-btn{height:22px;padding:0 8px;border:1px solid var(--line);background:none;color:var(--muted);border-radius:6px;cursor:pointer;font-size:11px;white-space:nowrap;transition:color .15s,border-color .15s;}
+  .memo-btn.has{color:var(--accent);border-color:var(--accent-brd);}
+  .memo-btn:hover{color:var(--text);border-color:var(--muted);}
+  .memo-preview{font-size:12px;color:var(--muted);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:1px 0;}
+  .memo-preview:hover{color:var(--text);}
+  .memo-area{font:inherit;font-size:13px;color:var(--text);background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;resize:vertical;width:100%;min-height:64px;outline:none;transition:border-color .15s;margin-top:2px;}
+  .memo-area:focus{border-color:var(--accent-brd);}
+  li.group-hdr{background:none;border:none;border-radius:0;padding:14px 4px 4px;margin:4px 0 0;display:flex;align-items:center;gap:10px;animation:none;}
+  li.group-hdr .ghdr-label{color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.1em;white-space:nowrap;}
+  li.group-hdr::after{content:'';flex:1;height:1px;background:var(--line);}
+  .del{flex:none;width:var(--tap);height:var(--tap);margin:-8px -6px 0 0;border:none;background:none;color:var(--muted);cursor:pointer;font-size:18px;border-radius:10px;opacity:.55;transition:color .15s,opacity .15s;}
+  .del:hover{color:var(--danger);opacity:1;}
+  .empty{text-align:center;color:var(--muted);padding:32px 24px;font-size:15px;}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(10px);max-width:90vw;background:var(--surface-2);color:var(--text);border:1px solid rgba(255,255,255,.12);padding:10px 16px;border-radius:14px;font-size:13px;box-shadow:var(--shadow-2);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:10;}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+  *:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+  .sync-dot{position:fixed;right:14px;bottom:14px;z-index:15;display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:99px;padding:5px 13px;box-shadow:var(--shadow-1);opacity:0;transition:opacity .2s;pointer-events:none;}
+  .sync-dot::before{content:'';width:10px;height:10px;border-radius:50%;border:2px solid var(--accent-soft);border-top-color:var(--accent);animation:spin .8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  body.syncing .sync-dot{opacity:1;}
+  .menu-wrap{position:relative;}
+  .menu-btn{width:36px;height:36px;border:1px solid var(--line);background:var(--surface);color:var(--muted);font-size:20px;border-radius:99px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:color .15s,background .15s;}
+  .menu-btn:hover{color:var(--text);background:var(--surface-2);}
+  .menu-dropdown{position:absolute;top:calc(100% + 6px);right:0;background:var(--surface);border:1px solid rgba(255,255,255,.1);border-radius:var(--radius);min-width:240px;padding:6px;z-index:10;box-shadow:var(--shadow-2);}
+  .menu-item{display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;border:none;background:none;color:var(--text);font-size:13px;border-radius:8px;cursor:pointer;text-align:left;transition:background .15s;}
+  .menu-item:hover{background:var(--surface-2);}
+  .menu-toggle{width:36px;height:20px;border-radius:10px;background:var(--surface-2);border:1px solid var(--line);position:relative;flex-shrink:0;transition:background .2s,border-color .2s;}
+  .menu-toggle::after{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:var(--muted);transition:transform .2s,background .2s;}
+  .menu-toggle.on{background:var(--accent);border-color:var(--accent-strong);}
+  .menu-toggle.on::after{transform:translateX(16px);background:#fff;}
+  @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}}
+  /* ログインゲート */
+  .login-gate{position:fixed;inset:0;z-index:30;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px;}
+  .login-card{background:var(--surface);border:1px solid rgba(255,255,255,.1);border-radius:20px;box-shadow:var(--shadow-2);padding:32px 28px;width:min(360px,92vw);text-align:center;display:flex;flex-direction:column;gap:16px;}
+  .login-card h2{margin:0;font-size:18px;font-weight:800;}
+  .login-card p{margin:0;font-size:13px;color:var(--muted);line-height:1.6;}
+  .login-btn{padding:12px 16px;border:none;background:linear-gradient(180deg,var(--accent),var(--accent-strong));color:#fff;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 2px 10px rgba(74,141,232,.3);transition:filter .15s;}
+  .login-btn:hover{filter:brightness(1.08);}
+  .login-btn:disabled{opacity:.5;cursor:not-allowed;}
+  .login-status{font-size:12px;color:var(--muted);min-height:16px;}
+  .login-status.err{color:var(--danger);}
+  .user-badge{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px;}
+</style>
+</head>
+<body>
+
+<header>
+  <div style="display:flex;align-items:center;gap:10px">
+    <h1>タスク整理くん</h1>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px">
+    <button class="view-btn active" id="viewToggle">⊞ カンバン</button>
+    <span class="count" id="count"></span>
+    <span class="user-badge" id="userBadge" hidden></span>
+    <div class="menu-wrap">
+      <button class="menu-btn" id="menuBtn">⋮</button>
+      <div class="menu-dropdown" id="menuDropdown" hidden>
+        <button class="menu-item" id="menuHideOldDone">
+          <span class="menu-toggle" id="menuToggle"></span>
+          1週間以上前の完了を非表示
+        </button>
+        <button class="menu-item" id="menuLogout" hidden>
+          <span style="width:20px;text-align:center;flex-shrink:0">↩</span>
+          ログアウト
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="login-gate" id="loginGate">
+  <div class="login-card">
+    <h2>タスク整理くん</h2>
+    <p>Googleアカウントでログインすると、あなた専用のスプレッドシートにタスクを保存するよ。</p>
+    <button class="login-btn" id="loginBtn" disabled>読み込み中…</button>
+    <div class="login-status" id="loginStatus"></div>
+  </div>
+</div>
+
+<div class="kanban-wrap" id="kanbanWrap"></div>
+
+<div id="listView" hidden>
+  <div class="filters">
+    <button class="chip" data-filter="all" aria-pressed="true">すべて</button>
+    <button class="chip" data-filter="active" aria-pressed="false">未完了</button>
+    <button class="chip" data-filter="done" aria-pressed="false">完了</button>
+    <button class="chip" id="groupToggle" aria-pressed="false">グループ化</button>
+    <button class="chip-clear" id="clearDone" hidden>完了を消す</button>
+  </div>
+  <div class="sort-bar">
+    <span class="sort-label">並び替え</span>
+    <button class="chip-sort" data-sort="manual" aria-pressed="true">手動</button>
+    <button class="chip-sort" data-sort="due" aria-pressed="false">締切順</button>
+    <button class="chip-sort" data-sort="priority" aria-pressed="false">優先度順</button>
+  </div>
+  <main>
+    <ul id="list"></ul>
+    <div class="empty" id="empty" hidden>タスクを追加して始めよう</div>
+  </main>
+</div>
+
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <div class="modal-hdr">
+      <span>タスクを編集</span>
+      <button class="modal-close" id="modalClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="m-field"><label class="m-label">タスク</label><textarea class="m-ta" id="mText" rows="3"></textarea></div>
+      <div class="m-field">
+        <label class="m-label">優先度</label>
+        <div class="prio-btns">
+          <button class="prio-btn" data-p="0">なし</button>
+          <button class="prio-btn" data-p="1">高</button>
+          <button class="prio-btn" data-p="2">中</button>
+          <button class="prio-btn" data-p="3">低</button>
+        </div>
+      </div>
+      <div class="m-field">
+        <label class="m-label">ステータス</label>
+        <div class="status-btns">
+          <button class="status-btn" data-s="todo">未着手</button>
+          <button class="status-btn" data-s="doing">進行中</button>
+          <button class="status-btn" data-s="done">完了</button>
+        </div>
+      </div>
+      <div class="m-field"><label class="m-label">締切</label><input type="date" class="m-date" id="mDue"></div>
+      <div class="m-field"><label class="m-label">カテゴリ</label><input type="text" class="m-inp" id="mCat" placeholder="例: 仕事、個人…"></div>
+      <div class="m-field"><label class="m-label">メモ</label><textarea class="m-ta" id="mMemo" rows="3" placeholder="メモを入力…"></textarea></div>
+    </div>
+    <div class="modal-foot">
+      <button class="m-del" id="mDel">削除</button>
+      <button class="m-save" id="mSave">保存</button>
+    </div>
+  </div>
+</div>
+
+<div class="sync-dot">保存中…</div>
+<div class="toast" id="toast"></div>
+
+<script src="https://accounts.google.com/gsi/client"></script>
+<script>
+/* ===== 設定: Google Cloud ConsoleでOAuthクライアントIDを発行してここに入れる ===== */
+var GOOGLE_CLIENT_ID = 'YOUR_CLIENT_ID.apps.googleusercontent.com';
+/* ============================================================================ */
+
+var todos=[], filter='all', catFilter=null, groupMode=false, sortMode='manual', viewMode='kanban';
+var dragSrcId=null, mId=null, mPrio=0, mStatus='todo', extraCats=[];
+var catOrderOverride=null, boardDragCat=null;
+var hideOldDone=false;
+
+var PRIO={0:{label:'—',cls:'p0'},1:{label:'高',cls:'p1'},2:{label:'中',cls:'p2'},3:{label:'低',cls:'p3'}};
+var PRIO_ORDER={1:1,2:2,3:3,0:4};
+var KCOLS=[{key:'todo',label:'未着手'},{key:'doing',label:'進行中'},{key:'done',label:'完了'}];
+
+var $list=$id('list'),$listView=$id('listView'),$empty=$id('empty'),$count=$id('count');
+var $clearDone=$id('clearDone'),$toast=$id('toast');
+var $groupTgl=$id('groupToggle'),$kWrap=$id('kanbanWrap'),$viewTgl=$id('viewToggle');
+var $overlay=$id('modalOverlay'),$mText=$id('mText'),$mDue=$id('mDue'),$mCat=$id('mCat'),$mMemo=$id('mMemo');
+var $filtersEl=document.querySelector('.filters');
+
+function $id(id){ return document.getElementById(id); }
+
+/* ===== Googleログイン & スプレッドシートAPI ===== */
+var COLUMNS=['id','text','done','created','priority','due','category','sort','memo','parent','status','doneAt'];
+var SHEET_NAME='todos';
+var SPREADSHEET_TITLE='タスク整理くんデータ';
+var SHEETS_BASE='https://sheets.googleapis.com/v4/spreadsheets/';
+var SCOPES='https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.email';
+
+var tokenClient=null, accessToken=null, tokenExpiresAt=0;
+var spreadsheetId=null, sheetGid=0, rowMap={}, userEmail='';
+
+function uid(){ return (window.crypto&&crypto.randomUUID)?crypto.randomUUID():'id-'+Date.now()+'-'+Math.random().toString(36).slice(2); }
+function colLetter(field){ return String.fromCharCode(65+COLUMNS.indexOf(field)); }
+function rowRangeAddr(row){ return colLetter('id')+row+':'+colLetter('doneAt')+row; }
+function valuesUrl(range,suffix){ return SHEETS_BASE+spreadsheetId+'/values/'+encodeURIComponent(range)+(suffix||''); }
+function toRowArray(t){ return [t.id,t.text,!!t.done,t.created||0,t.priority||0,t.due||'',t.category||'',t.sort||0,t.memo||'',t.parent||'',t.status||'todo',t.doneAt||0]; }
+function rowToObj(r){
+  return {
+    id:String(r[0]||''), text:String(r[1]||''),
+    done:(r[2]===true||r[2]==='TRUE'||r[2]==='true'),
+    created:Number(r[3])||0, priority:Number(r[4])||0, due:r[5]?String(r[5]):'',
+    category:r[6]?String(r[6]):'', sort:Number(r[7])||0, memo:r[8]?String(r[8]):'',
+    parent:r[9]?String(r[9]):'', status:r[10]?String(r[10]):'todo', doneAt:Number(r[11])||0
+  };
+}
+
+tokenClient=google.accounts.oauth2.initTokenClient({client_id:GOOGLE_CLIENT_ID,scope:SCOPES,callback:function(){}});
+$id('loginBtn').disabled=false; $id('loginBtn').textContent='Googleでログイン';
+
+function ensureToken(){
+  if(accessToken&&Date.now()<tokenExpiresAt-60000) return Promise.resolve(accessToken);
+  return new Promise(function(resolve,reject){
+    tokenClient.callback=function(resp){
+      if(resp.error){ reject(new Error(resp.error)); return; }
+      accessToken=resp.access_token; tokenExpiresAt=Date.now()+(resp.expires_in||3600)*1000;
+      resolve(accessToken);
+    };
+    tokenClient.requestAccessToken({prompt:accessToken?'':'consent'});
+  });
+}
+
+function apiFetch(url,opts){
+  opts=opts||{};
+  return ensureToken().then(function(tok){
+    opts.headers=Object.assign({Authorization:'Bearer '+tok,'Content-Type':'application/json'},opts.headers||{});
+    return fetch(url,opts);
+  }).then(function(res){
+    if(res.status===401){
+      accessToken=null;
+      return ensureToken().then(function(tok){
+        opts.headers.Authorization='Bearer '+tok;
+        return fetch(url,opts);
+      });
+    }
+    return res;
+  }).then(function(res){
+    return res.json().catch(function(){ return {}; }).then(function(data){
+      if(!res.ok) throw new Error((data.error&&data.error.message)||res.statusText);
+      return data;
+    });
+  });
+}
+
+function fetchUserEmail(){
+  return apiFetch('https://www.googleapis.com/oauth2/v3/userinfo').then(function(d){ userEmail=d.email||''; });
+}
+function driveSearchSpreadsheet(){
+  var q=encodeURIComponent("name='"+SPREADSHEET_TITLE+"' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false");
+  return apiFetch('https://www.googleapis.com/drive/v3/files?q='+q+'&fields=files(id,name)&spaces=drive').then(function(d){
+    return (d.files&&d.files[0])?d.files[0].id:null;
+  });
+}
+function createSpreadsheet(){
+  return apiFetch('https://sheets.googleapis.com/v4/spreadsheets',{method:'POST',body:JSON.stringify({
+    properties:{title:SPREADSHEET_TITLE}, sheets:[{properties:{title:SHEET_NAME}}]
+  })}).then(function(d){ return d.spreadsheetId; });
+}
+function writeHeader(){
+  return apiFetch(valuesUrl(SHEET_NAME+'!A1:L1','?valueInputOption=RAW'),{method:'PUT',body:JSON.stringify({values:[COLUMNS]})});
+}
+function loadSheetMeta(){
+  return apiFetch(SHEETS_BASE+spreadsheetId+'?fields=sheets.properties').then(function(d){
+    var sh=(d.sheets||[]).filter(function(s){ return s.properties.title===SHEET_NAME; })[0];
+    sheetGid=sh?sh.properties.sheetId:0;
+  });
+}
+function ensureSpreadsheet(){
+  var cacheKey='tsk_sheetId_'+(userEmail||'default');
+  var cached=localStorage.getItem(cacheKey);
+  var p=Promise.resolve();
+  if(cached){
+    p=apiFetch(SHEETS_BASE+cached+'?fields=spreadsheetId').then(function(){ spreadsheetId=cached; }).catch(function(){ spreadsheetId=null; });
+  }
+  return p.then(function(){
+    if(spreadsheetId) return;
+    return driveSearchSpreadsheet().then(function(found){
+      if(found){ spreadsheetId=found; return; }
+      return createSpreadsheet().then(function(id){ spreadsheetId=id; return writeHeader(); });
+    });
+  }).then(function(){
+    localStorage.setItem(cacheKey,spreadsheetId);
+    return loadSheetMeta();
+  });
+}
+
+function saveRowsToSheet(ids){
+  var data=[];
+  ids.forEach(function(id){
+    var t=findTodo(id), row=rowMap[id];
+    if(!t||!row) return;
+    data.push({range:SHEET_NAME+'!'+rowRangeAddr(row), values:[toRowArray(t)]});
+  });
+  if(!data.length) return Promise.resolve();
+  return apiFetch(SHEETS_BASE+spreadsheetId+'/values:batchUpdate',{method:'POST',body:JSON.stringify({valueInputOption:'RAW',data:data})});
+}
+function deleteRowsFromSheet(ids){
+  var rows=ids.map(function(id){ return rowMap[id]; }).filter(function(r){ return r; });
+  if(!rows.length) return Promise.resolve();
+  rows.sort(function(a,b){ return b-a; });
+  var requests=rows.map(function(row){
+    return {deleteDimension:{range:{sheetId:sheetGid,dimension:'ROWS',startIndex:row-1,endIndex:row}}};
+  });
+  return apiFetch(SHEETS_BASE+spreadsheetId+':batchUpdate',{method:'POST',body:JSON.stringify({requests:requests})})
+    .then(function(){ return api.getTodos(); });
+}
+
+var api={};
+api.getTodos=function(){
+  return apiFetch(valuesUrl(SHEET_NAME+'!A2:L100000')).then(function(d){
+    var rows=d.values||[]; rowMap={};
+    todos=rows.map(function(r,i){ var o=rowToObj(r); rowMap[o.id]=i+2; return o; }).filter(function(o){ return o.id; });
+    return todos;
+  });
+};
+api.updateTodo=function(id){ return saveRowsToSheet([id]).then(function(){ return todos; }); };
+api.deleteTodo=function(id){ return deleteRowsFromSheet([id]).then(function(){ return todos; }); };
+api.renameCategory=function(oldCat,newCat){
+  var ids=todos.filter(function(t){ return t.category===newCat; }).map(function(t){ return t.id; });
+  return saveRowsToSheet(ids).then(function(){ return todos; });
+};
+api.moveTask=function(id,status,category,sortUpdates){
+  var ids=[id]; if(sortUpdates) ids=ids.concat(sortUpdates.map(function(u){ return u.id; }));
+  ids=ids.filter(function(v,i,a){ return a.indexOf(v)===i; });
+  return saveRowsToSheet(ids).then(function(){ return todos; });
+};
+api.addTodoFull=function(text,category,status,id){
+  var t=findTodo(id); if(!t) return Promise.resolve(todos);
+  if(!t.created) t.created=Date.now();
+  return apiFetch(valuesUrl(SHEET_NAME+'!A:L',':append?valueInputOption=RAW&insertDataOption=INSERT_ROWS'),{
+    method:'POST', body:JSON.stringify({values:[toRowArray(t)]})
+  }).then(function(d){
+    var updatedRange=d.updates&&d.updates.updatedRange;
+    var m=updatedRange&&updatedRange.match(/![A-Z]+(\d+)/);
+    if(m) rowMap[id]=Number(m[1]);
+    return todos;
+  });
+};
+api.updateSort=function(sortUpdates){
+  var ids=sortUpdates.map(function(u){ return u.id; });
+  return saveRowsToSheet(ids).then(function(){ return todos; });
+};
+api.editTodo=function(id){ return saveRowsToSheet([id]).then(function(){ return todos; }); };
+api.setCategory=function(id){ return saveRowsToSheet([id]).then(function(){ return todos; }); };
+api.setMemo=function(id){ return saveRowsToSheet([id]).then(function(){ return todos; }); };
+api.setDone=function(id,done){
+  var t=findTodo(id); if(t){ t.done=!!done; t.doneAt=done?Date.now():0; }
+  return saveRowsToSheet([id]).then(function(){ return todos; });
+};
+api.setPriority=function(id){ return saveRowsToSheet([id]).then(function(){ return todos; }); };
+api.setDue=function(id){ return saveRowsToSheet([id]).then(function(){ return todos; }); };
+api.clearDone=function(ids){ return deleteRowsFromSheet(ids||[]).then(function(){ return todos; }); };
+
+/* ===== 通信 ===== */
+function run(fn){
+  var args=Array.prototype.slice.call(arguments,1);
+  return api[fn].apply(null,args);
+}
+/* 保存はバックグラウンドで順番に実行する。画面はブロックしない。
+   makeCall はAPI呼び出しを開始する関数。連続操作中の途中レスポンスは捨てて、
+   最後のレスポンスだけを画面に反映する(古いデータで上書きされるのを防ぐ) */
+var pendingSync=0, syncQueue=Promise.resolve();
+function sync(makeCall){
+  pendingSync++;
+  document.body.classList.add('syncing');
+  syncQueue=syncQueue.then(function(){ return makeCall(); }).then(function(f){
+    pendingSync--;
+    if(pendingSync===0){
+      document.body.classList.remove('syncing');
+      if(f){ todos=f; render(); }
+    }
+  },function(e){
+    pendingSync--;
+    if(pendingSync===0) document.body.classList.remove('syncing');
+    toast('エラー: '+((e&&e.message)||'通信を確認してください'));
+    if(pendingSync===0){
+      return run('getTodos').then(function(f){ if(pendingSync===0){ todos=f||[]; render(); } },function(){});
+    }
+  });
+}
+var _tt=null;
+function toast(msg){ $toast.textContent=msg; $toast.classList.add('show'); clearTimeout(_tt); _tt=setTimeout(function(){ $toast.classList.remove('show'); },3500); }
+function pad(n){ return n<10?'0'+n:''+n; }
+function todayStr(){ var d=new Date(); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
+function dueState(due){ var t=todayStr(); return due<t?'over':due===t?'today':'set'; }
+function findTodo(id){ for(var i=0;i<todos.length;i++){ if(todos[i].id===id) return todos[i]; } return null; }
+function getCategories(){ var s={}; todos.forEach(function(t){ if(t.category) s[t.category]=1; }); return Object.keys(s).sort(); }
+
+/* モーダル */
+function openModal(t){
+  mId=t.id; mPrio=t.priority||0; mStatus=t.status||'todo';
+  $mText.value=t.text; $mDue.value=t.due||'';
+  $mDue.className='m-date'+(t.due?' '+dueState(t.due):'');
+  $mCat.value=t.category||''; $mMemo.value=t.memo||'';
+  refreshPrioBtns(); refreshStatusBtns();
+  $overlay.classList.add('open');
+  setTimeout(function(){ $mText.focus(); },80);
+}
+function closeModal(){ $overlay.classList.remove('open'); mId=null; }
+function refreshPrioBtns(){
+  Array.prototype.forEach.call(document.querySelectorAll('.prio-btn'),function(b){
+    b.className='prio-btn'+(parseInt(b.dataset.p)===mPrio?' sel-'+mPrio:'');
+  });
+}
+function refreshStatusBtns(){
+  Array.prototype.forEach.call(document.querySelectorAll('.status-btn'),function(b){ b.classList.toggle('sel',b.dataset.s===mStatus); });
+}
+function saveModal(){
+  if(!mId) return;
+  var id=mId, t=findTodo(id); if(!t){ closeModal(); return; }
+  var fields={}, nText=$mText.value.trim(), nDue=$mDue.value||'', nCat=$mCat.value.trim(), nMemo=$mMemo.value.trim();
+  if(nText&&nText!==t.text)              { t.text=nText;      fields.text=nText; }
+  if(mPrio!==t.priority)                 { t.priority=mPrio;  fields.priority=mPrio; }
+  if(mStatus!==(t.status||'todo'))       { t.status=mStatus;  fields.status=mStatus; }
+  if(nDue!==(t.due||''))                 { t.due=nDue;        fields.due=nDue; }
+  if(nCat!==(t.category||''))            { t.category=nCat;   fields.category=nCat; }
+  if(nMemo!==(t.memo||''))               { t.memo=nMemo;      fields.memo=nMemo; }
+  closeModal(); render();
+  if(Object.keys(fields).length) sync(function(){ return run('updateTodo',id,fields); });
+}
+function deleteFromModal(){
+  if(!mId) return; var id=mId; closeModal();
+  todos=todos.filter(function(x){ return x.id!==id; }); render(); sync(function(){ return run('deleteTodo',id); });
+}
+$id('modalClose').onclick=closeModal;
+$id('mSave').onclick=saveModal;
+$id('mDel').onclick=deleteFromModal;
+$overlay.addEventListener('click',function(e){ if(e.target===$overlay) closeModal(); });
+document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&mId) closeModal(); });
+$mText.addEventListener('keydown',function(e){ if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)) saveModal(); });
+Array.prototype.forEach.call(document.querySelectorAll('.prio-btn'),function(b){ b.onclick=function(){ mPrio=parseInt(b.dataset.p); refreshPrioBtns(); }; });
+Array.prototype.forEach.call(document.querySelectorAll('.status-btn'),function(b){ b.onclick=function(){ mStatus=b.dataset.s; refreshStatusBtns(); }; });
+
+/* ソート・絞り込み */
+function sorted(rows){
+  if(sortMode==='due') return rows.slice().sort(function(a,b){ if(!a.due&&!b.due) return 0; if(!a.due) return 1; if(!b.due) return -1; return a.due<b.due?-1:a.due>b.due?1:0; });
+  if(sortMode==='priority') return rows.slice().sort(function(a,b){ return PRIO_ORDER[a.priority]-PRIO_ORDER[b.priority]; });
+  return rows.slice().sort(function(a,b){ return (a.sort||0)-(b.sort||0); });
+}
+function isOldDone(t){ return t.done&&(t.doneAt||t.created||0)<Date.now()-7*24*60*60*1000; }
+function visible(){ var r=todos; if(hideOldDone) r=r.filter(function(t){ return !isOldDone(t); }); if(filter==='active') r=r.filter(function(t){ return !t.done; }); if(filter==='done') r=r.filter(function(t){ return t.done; }); if(catFilter!=null) r=r.filter(function(t){ return t.category===catFilter; }); return r; }
+
+/* render */
+function render(){
+  if(viewMode==='kanban'){ $kWrap.hidden=false; $listView.hidden=true; renderKanban(); }
+  else { $kWrap.hidden=true; $listView.hidden=false; renderList(); }
+  var active=todos.filter(function(t){ return !t.done; }).length;
+  $count.textContent=todos.length?(active+' 件 残り'):'';
+}
+
+/* カンバン */
+function renderKanban(){
+  $kWrap.innerHTML='';
+  var catSeen={}, allCats=[];
+  todos.forEach(function(t){ var k=t.category||''; if(!catSeen[k]){ catSeen[k]=true; allCats.push(k); } });
+  extraCats.forEach(function(c){ if(!catSeen[c]){ catSeen[c]=true; allCats.push(c); } });
+  var catOrder;
+  if(catOrderOverride){
+    var inOv={}; catOrderOverride.forEach(function(c){ inOv[c]=true; });
+    catOrder=catOrderOverride.filter(function(c){ return catSeen[c]; });
+    allCats.forEach(function(c){ if(!inOv[c]) catOrder.push(c); });
+  } else {
+    catOrder=allCats.slice();
+    catOrder.sort(function(a,b){ if(a==='') return 1; if(b==='') return -1; return a<b?-1:a>b?1:0; });
+  }
+  if(catOrder.length===0) catOrder=[''];
+  catOrder.forEach(function(cat){
+    var items=todos.filter(function(t){ return (t.category||'')===cat; });
+    if(hideOldDone) items=items.filter(function(t){ return !isOldDone(t); });
+    renderKanbanBoard(cat,items);
+  });
+
+  /* ＋ 新しいボードを追加 */
+  var wrap=document.createElement('div'); wrap.className='add-board-wrap';
+  var btn=document.createElement('button'); btn.className='add-board-btn';
+  btn.innerHTML='<span style="font-size:18px;line-height:1">＋</span> 新しいボードを追加';
+  var inp=document.createElement('input'); inp.type='text'; inp.className='add-board-input';
+  inp.placeholder='カテゴリ名を入力… (Enter で追加)'; inp.hidden=true;
+  btn.onclick=function(){ btn.hidden=true; inp.hidden=false; inp.focus(); };
+  inp.addEventListener('keydown',function(e){
+    if(e.key==='Enter'){
+      var v=inp.value.trim();
+      if(v && !catSeen[v]){ extraCats.push(v); }
+      inp.value=''; inp.hidden=true; btn.hidden=false;
+      if(v) render();
+    }
+    if(e.key==='Escape'){ inp.value=''; inp.hidden=true; btn.hidden=false; }
+  });
+  inp.addEventListener('blur',function(){ setTimeout(function(){ if(!inp.value){ inp.hidden=true; btn.hidden=false; } },150); });
+  wrap.appendChild(btn); wrap.appendChild(inp);
+  $kWrap.appendChild(wrap);
+}
+
+function renderKanbanBoard(cat,items){
+  var board=document.createElement('div'); board.className='kanban-board'; board.dataset.boardCat=cat;
+  board.addEventListener('dragover',function(e){
+    if(e.dataTransfer.types.indexOf('boardcat')<0) return;
+    if(boardDragCat===cat) return;
+    e.preventDefault();
+    Array.prototype.forEach.call(document.querySelectorAll('.board-drag-over'),function(el){ el.classList.remove('board-drag-over'); });
+    board.classList.add('board-drag-over');
+  });
+  board.addEventListener('dragleave',function(e){ if(!board.contains(e.relatedTarget)) board.classList.remove('board-drag-over'); });
+  board.addEventListener('drop',function(e){
+    if(e.dataTransfer.types.indexOf('boardcat')<0) return;
+    e.preventDefault(); board.classList.remove('board-drag-over');
+    var srcCat=e.dataTransfer.getData('boardcat'); if(!srcCat||srcCat===cat) return;
+    reorderBoards(srcCat,cat);
+  });
+  var titleEl=document.createElement('div'); titleEl.className='kanban-board-title';
+  var handle=document.createElement('span'); handle.className='board-handle'; handle.textContent='⠿'; handle.setAttribute('aria-hidden','true');
+  handle.addEventListener('mousedown',function(){ board.draggable=true; });
+  board.addEventListener('dragstart',function(e){
+    if(e.target.closest('.kcard')){ board.draggable=false; return; }
+    if(!board.draggable) return;
+    boardDragCat=cat; e.dataTransfer.setData('boardcat',cat); e.dataTransfer.effectAllowed='move';
+    board.style.opacity='.35';
+  });
+  board.addEventListener('dragend',function(){
+    board.draggable=false; board.style.opacity=''; boardDragCat=null;
+    Array.prototype.forEach.call(document.querySelectorAll('.board-drag-over'),function(el){ el.classList.remove('board-drag-over'); });
+  });
+  titleEl.appendChild(handle);
+  var catLabel=document.createElement('span'); catLabel.className='board-title-label'; catLabel.textContent=cat||'未分類';
+  if(cat!=='') catLabel.onclick=function(){ startBoardRename(cat,catLabel); };
+  titleEl.appendChild(catLabel);
+  if(items.length===0&&cat!==''){
+    var delBtn=document.createElement('button'); delBtn.className='board-del-btn'; delBtn.textContent='✕'; delBtn.title='ボードを削除';
+    delBtn.onclick=function(e){ e.stopPropagation(); extraCats=extraCats.filter(function(c){ return c!==cat; }); if(catOrderOverride) catOrderOverride=catOrderOverride.filter(function(c){ return c!==cat; }); render(); };
+    titleEl.appendChild(delBtn);
+  }
+  board.appendChild(titleEl);
+  var colsWrap=document.createElement('div'); colsWrap.className='kanban-cols';
+  KCOLS.forEach(function(col){
+    var cards=items.filter(function(t){ return (t.status||'todo')===col.key; }).slice().sort(function(a,b){ return (a.sort||0)-(b.sort||0); });
+    var colEl=document.createElement('div'); colEl.className='kanban-col'; colEl.dataset.col=col.key; colEl.dataset.cat=cat;
+    var hdr=document.createElement('div'); hdr.className='kanban-col-hdr';
+    var lbl=document.createElement('span'); lbl.textContent=col.label;
+    var cnt=document.createElement('span'); cnt.className='kcnt'; cnt.textContent=cards.length;
+    hdr.appendChild(lbl); hdr.appendChild(cnt); colEl.appendChild(hdr);
+    var cardsEl=document.createElement('div'); cardsEl.className='kcards';
+    cards.forEach(function(t){ cardsEl.appendChild(makeKCard(t)); });
+    colEl.appendChild(cardsEl);
+    colEl.addEventListener('dragover',function(e){ if(e.dataTransfer.types.indexOf('taskid')<0) return; e.preventDefault(); colEl.classList.add('col-over'); });
+    colEl.addEventListener('dragleave',function(e){ if(!colEl.contains(e.relatedTarget)) colEl.classList.remove('col-over'); });
+    colEl.addEventListener('drop',function(e){ e.preventDefault(); colEl.classList.remove('col-over'); var id=e.dataTransfer.getData('taskid'); if(id) doSetStatusAndCat(id,col.key,cat); });
+    var kAddBtn=document.createElement('button'); kAddBtn.className='kadd-btn'; kAddBtn.textContent='＋ 追加';
+    var kAddInp=document.createElement('input'); kAddInp.type='text'; kAddInp.className='kadd-input'; kAddInp.placeholder='タスク名… (Enter で追加)'; kAddInp.hidden=true;
+    kAddBtn.onclick=function(){ kAddBtn.hidden=true; kAddInp.hidden=false; kAddInp.focus(); };
+    (function(colKey,catKey){
+      kAddInp.addEventListener('keydown',function(e){
+        if(e.key==='Enter'){ var v=kAddInp.value.trim(); if(v) addToBoard(v,catKey,colKey); kAddInp.value=''; kAddInp.hidden=true; kAddBtn.hidden=false; }
+        if(e.key==='Escape'){ kAddInp.value=''; kAddInp.hidden=true; kAddBtn.hidden=false; }
+      });
+      kAddInp.addEventListener('blur',function(){ setTimeout(function(){ if(!kAddInp.value){ kAddInp.hidden=true; kAddBtn.hidden=false; } },150); });
+    })(col.key,cat);
+    colEl.appendChild(kAddBtn); colEl.appendChild(kAddInp);
+    colsWrap.appendChild(colEl);
+  });
+  board.appendChild(colsWrap);
+  $kWrap.appendChild(board);
+}
+
+function makeKCard(t){
+  var card=document.createElement('div');
+  card.className='kcard'+(t.priority?' prio-'+t.priority:''); card.dataset.id=t.id; card.draggable=true;
+  card.addEventListener('click',function(){ if(!card.classList.contains('k-dragging')) openModal(t); });
+  card.addEventListener('dragstart',function(e){ e.dataTransfer.setData('taskid',t.id); e.dataTransfer.effectAllowed='move'; card.classList.add('k-dragging'); });
+  card.addEventListener('dragend',function(){ card.classList.remove('k-dragging'); Array.prototype.forEach.call(document.querySelectorAll('.col-over,.k-drop-before,.k-drop-after'),function(el){ el.classList.remove('col-over','k-drop-before','k-drop-after'); }); });
+  card.addEventListener('dragover',function(e){ if(e.dataTransfer.types.indexOf('taskid')<0) return; e.preventDefault(); e.stopPropagation(); Array.prototype.forEach.call(document.querySelectorAll('.k-drop-before,.k-drop-after'),function(el){ el.classList.remove('k-drop-before','k-drop-after'); }); var r=card.getBoundingClientRect(); card.classList.add(e.clientY<r.top+r.height/2?'k-drop-before':'k-drop-after'); });
+  card.addEventListener('drop',function(e){ e.preventDefault(); e.stopPropagation(); var id=e.dataTransfer.getData('taskid'); if(!id||id===t.id) return; var before=card.classList.contains('k-drop-before'); card.classList.remove('k-drop-before','k-drop-after'); var col=card.closest('.kanban-col'); reorderKanban(id,t.id,col.dataset.col,col.dataset.cat,before); });
+
+  var ktext=document.createElement('div'); ktext.className='ktext'; ktext.textContent=t.text; card.appendChild(ktext);
+  var kmeta=document.createElement('div'); kmeta.className='kmeta';
+  if(t.priority>0){ var kp=document.createElement('span'); kp.className='kprio p'+t.priority; kp.textContent=PRIO[t.priority].label; kmeta.appendChild(kp); }
+  if(t.due){ var kd=document.createElement('span'); kd.className='kdue '+dueState(t.due); kd.textContent=t.due.replace(/-/g,'/'); kmeta.appendChild(kd); }
+  if(t.category){ var kc=document.createElement('span'); kc.className='kcat'; kc.textContent='# '+t.category; kmeta.appendChild(kc); }
+  if(kmeta.children.length) card.appendChild(kmeta);
+  if(t.memo){ var km=document.createElement('div'); km.className='kmemo-p'; km.textContent=t.memo; card.appendChild(km); }
+  return card;
+}
+
+function startBoardRename(oldCat,labelEl){
+  var inp=document.createElement('input'); inp.className='board-title-input'; inp.value=oldCat;
+  labelEl.parentNode.replaceChild(inp,labelEl);
+  inp.focus(); inp.select();
+  var done=false;
+  function commit(){
+    if(done) return; done=true;
+    var newCat=inp.value.trim();
+    if(!newCat||newCat===oldCat){ render(); return; }
+    todos.forEach(function(t){ if(t.category===oldCat) t.category=newCat; });
+    extraCats=extraCats.map(function(c){ return c===oldCat?newCat:c; });
+    if(catOrderOverride) catOrderOverride=catOrderOverride.map(function(c){ return c===oldCat?newCat:c; });
+    render();
+    sync(function(){ return run('renameCategory',oldCat,newCat); });
+  }
+  inp.addEventListener('blur',commit);
+  inp.addEventListener('keydown',function(e){ if(e.key==='Enter') inp.blur(); if(e.key==='Escape'){ done=true; render(); } });
+}
+
+function reorderBoards(srcCat,tgtCat){
+  if(!catOrderOverride){
+    catOrderOverride=[];
+    Array.prototype.forEach.call(document.querySelectorAll('.kanban-board'),function(b){ catOrderOverride.push(b.dataset.boardCat); });
+  }
+  var si=catOrderOverride.indexOf(srcCat), ti=catOrderOverride.indexOf(tgtCat);
+  if(si===-1||ti===-1) return;
+  catOrderOverride.splice(si,1);
+  ti=catOrderOverride.indexOf(tgtCat);
+  catOrderOverride.splice(ti,0,srcCat);
+  render();
+}
+
+function flashCard(id,status){
+  var card=document.querySelector('.kcard[data-id="'+id+'"]');
+  if(!card) return;
+  card.classList.remove('flash-todo','flash-doing','flash-done');
+  void card.offsetWidth;
+  card.classList.add('flash-'+status);
+  setTimeout(function(){ card.classList.remove('flash-todo','flash-doing','flash-done'); },1100);
+}
+
+function doSetStatusAndCat(id,status,category){
+  var t=findTodo(id); if(!t) return;
+  var statusChanged=(t.status||'todo')!==status, catChanged=(t.category||'')!==category;
+  if(!statusChanged&&!catChanged) return;
+  if(statusChanged) t.status=status;
+  if(catChanged) t.category=category;
+  render();
+  if(statusChanged) flashCard(id,status);
+  sync(function(){ return run('moveTask',id,statusChanged?status:null,catChanged?category:null,null); });
+}
+
+function reorderKanban(srcId,tgtId,colKey,catKey,before){
+  var src=findTodo(srcId); if(!src) return;
+  var oldStatus=src.status||'todo', oldCat=src.category||'';
+  src.status=colKey; src.category=catKey;
+  var si=todos.indexOf(src); todos.splice(si,1);
+  var ti=todos.indexOf(findTodo(tgtId));
+  if(ti===-1) todos.push(src); else todos.splice(before?ti:ti+1,0,src);
+  var base=Date.now(); todos.forEach(function(t,i){ t.sort=base+i; });
+  render();
+  if(oldStatus!==colKey) flashCard(srcId,colKey);
+  var sortUpdates=todos.map(function(t){ return {id:t.id,sort:t.sort}; });
+  sync(function(){ return run('moveTask',srcId,oldStatus!==colKey?colKey:null,oldCat!==catKey?catKey:null,sortUpdates); });
+}
+
+function addToBoard(text,category,status){
+  var mx=0; todos.forEach(function(t){ if((t.sort||0)>mx) mx=t.sort; });
+  var id=uid();
+  todos.push({id:id,text:text,done:false,priority:0,due:'',category:category,sort:mx+1,memo:'',status:status});
+  render();
+  sync(function(){ return run('addTodoFull',text,category,status,id); });
+}
+
+/* リスト */
+function renderList(){
+  var rows=sorted(visible()); $list.innerHTML='';
+  var canDrag=(sortMode==='manual'&&!groupMode);
+  if(groupMode&&rows.length>0){
+    var groups={},order=[];
+    rows.forEach(function(t){ var k=t.category||''; if(!groups[k]){groups[k]=[];order.push(k);} groups[k].push(t); });
+    order.sort(function(a,b){ if(a==='') return 1; if(b==='') return -1; return a<b?-1:a>b?1:0; });
+    order.forEach(function(k){ var hdr=document.createElement('li'); hdr.className='group-hdr'; hdr.setAttribute('role','presentation'); var lbl=document.createElement('span'); lbl.className='ghdr-label'; lbl.textContent=k||'未分類'; hdr.appendChild(lbl); $list.appendChild(hdr); groups[k].forEach(function(t){ $list.appendChild(rowEl(t,canDrag)); }); });
+  } else { rows.forEach(function(t){ $list.appendChild(rowEl(t,canDrag)); }); }
+  $empty.hidden=rows.length>0;
+  if(rows.length===0) $empty.textContent=todos.length===0?'タスクを追加して始めよう':(filter==='done'?'完了したタスクはまだないよ':'未完了のタスクはなし。お疲れさま');
+  $clearDone.hidden=todos.filter(function(t){ return t.done; }).length===0;
+  updateCatChips();
+}
+function updateCatChips(){
+  Array.prototype.forEach.call(document.querySelectorAll('.chip-cat'),function(el){ el.parentNode.removeChild(el); });
+  var cats=getCategories(); if(catFilter!==null&&cats.indexOf(catFilter)===-1) catFilter=null;
+  cats.forEach(function(cat){ var btn=document.createElement('button'); btn.className='chip chip-cat'; btn.dataset.cat=cat; btn.textContent='# '+cat; btn.setAttribute('aria-pressed',catFilter===cat?'true':'false'); btn.onclick=function(){ catFilter=(catFilter===cat)?null:cat; render(); }; $filtersEl.insertBefore(btn,$groupTgl); });
+}
+
+/* リストD&D */
+function lDragStart(e){ dragSrcId=this.dataset.id; this.classList.add('dragging'); e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('listid',this.dataset.id); }
+function lDragOver(e){ e.preventDefault(); Array.prototype.forEach.call(document.querySelectorAll('li.drag-over-before,li.drag-over-after'),function(el){ el.classList.remove('drag-over-before','drag-over-after'); }); if(!this.classList.contains('dragging')&&this.dataset.id){ var r=this.getBoundingClientRect(); this.classList.add(e.clientY<r.top+r.height/2?'drag-over-before':'drag-over-after'); } }
+function lDrop(e){ e.stopPropagation(); var tgt=this.dataset.id,bef=this.classList.contains('drag-over-before'); if(dragSrcId&&dragSrcId!==tgt) reorderList(dragSrcId,tgt,bef); return false; }
+function lDragEnd(){ Array.prototype.forEach.call(document.querySelectorAll('li.dragging,li.drag-over-before,li.drag-over-after'),function(el){ el.classList.remove('dragging','drag-over-before','drag-over-after'); }); dragSrcId=null; }
+function reorderList(srcId,tgtId,before){
+  var src=findTodo(srcId); if(!src) return; var si=todos.indexOf(src); todos.splice(si,1);
+  var ti=todos.indexOf(findTodo(tgtId)); if(ti===-1) todos.push(src); else todos.splice(before?ti:ti+1,0,src);
+  var base=Date.now(); todos.forEach(function(t,i){ t.sort=base+i; }); render();
+  var sortUpdates=todos.map(function(t){ return {id:t.id,sort:t.sort}; });
+  sync(function(){ return run('updateSort',sortUpdates); });
+}
+
+/* rowEl */
+function rowEl(t,canDrag){
+  var li=document.createElement('li'); li.dataset.id=t.id; if(t.done) li.className='done'; if(t.priority) li.classList.add('prio-'+t.priority);
+  if(canDrag){ li.draggable=true; li.addEventListener('dragstart',lDragStart); li.addEventListener('dragover',lDragOver); li.addEventListener('drop',lDrop); li.addEventListener('dragend',lDragEnd); var h=document.createElement('div'); h.className='drag-handle'; h.setAttribute('aria-hidden','true'); h.textContent='⠿'; li.appendChild(h); }
+  var check=document.createElement('button'); check.className='check'; check.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l5 5L20 6"/></svg>'; check.onclick=function(){ toggle(t.id); };
+  var body=document.createElement('div'); body.className='body';
+  var text=document.createElement('div'); text.className='text'; text.textContent=t.text; text.onclick=function(){ startTextEdit(body,text,t); };
+  var meta=document.createElement('div'); meta.className='meta';
+  var pBtn=document.createElement('button'); var p=PRIO[t.priority]||PRIO[0]; pBtn.className='prio '+p.cls; pBtn.textContent=p.label; pBtn.onclick=function(){ cyclePrio(t.id); }; meta.appendChild(pBtn);
+  var dinp=document.createElement('input'); dinp.type='date'; dinp.className='due-input'; if(t.due){ dinp.value=t.due; dinp.classList.add(dueState(t.due)); } dinp.onchange=function(){ setDue(t.id,dinp.value); }; meta.appendChild(dinp);
+  if(t.due){ var clr=document.createElement('button'); clr.className='due-clear'; clr.textContent='✕'; clr.onclick=function(){ setDue(t.id,''); }; meta.appendChild(clr); }
+  var catTag=document.createElement('button'); catTag.className='cat-tag'+(t.category?'':' empty'); catTag.textContent=t.category||'+ カテゴリ'; catTag.onclick=function(){ startCatEdit(meta,catTag,t); }; meta.appendChild(catTag);
+  var mBtn=document.createElement('button'); mBtn.className='memo-btn'+(t.memo?' has':''); mBtn.textContent=t.memo?'メモ':'+ メモ'; mBtn.onclick=function(){ openMemoEdit(body,t); }; meta.appendChild(mBtn);
+  body.appendChild(text); body.appendChild(meta);
+  if(t.memo){ var mp=document.createElement('div'); mp.className='memo-preview'; mp.textContent=t.memo; mp.onclick=function(){ openMemoEdit(body,t); }; body.appendChild(mp); }
+  var del=document.createElement('button'); del.className='del'; del.textContent='✕'; del.onclick=function(){ removeLi(li,t.id); };
+  li.appendChild(check); li.appendChild(body); li.appendChild(del);
+  return li;
+}
+
+function startTextEdit(body,textEl,t){ if(body.querySelector('.text-edit')) return; var inp=document.createElement('input'); inp.className='text-edit'; inp.value=t.text; body.replaceChild(inp,textEl); inp.focus(); inp.setSelectionRange(inp.value.length,inp.value.length); var done=false; function commit(save){ if(done) return; done=true; var v=inp.value.trim(); if(save&&v&&v!==t.text){ t.text=v; sync(function(){ return run('editTodo',t.id,v); }); } else { render(); } } inp.addEventListener('keydown',function(e){ if(e.key==='Enter') commit(true); if(e.key==='Escape') commit(false); }); inp.addEventListener('blur',function(){ commit(true); }); }
+function startCatEdit(meta,catTag,t){ if(meta.querySelector('.cat-input')) return; var inp=document.createElement('input'); inp.className='cat-input'; inp.value=t.category||''; inp.placeholder='カテゴリ名…'; var dl=$id('_cdl'); if(!dl){ dl=document.createElement('datalist'); dl.id='_cdl'; document.body.appendChild(dl); } dl.innerHTML=''; getCategories().forEach(function(c){ var o=document.createElement('option'); o.value=c; dl.appendChild(o); }); inp.setAttribute('list','_cdl'); meta.replaceChild(inp,catTag); inp.focus(); inp.select(); var done=false; function commit(){ if(done) return; done=true; var v=inp.value.trim(); if(v!==(t.category||'')){ t.category=v; sync(function(){ return run('setCategory',t.id,v); }); } else { render(); } } inp.addEventListener('blur',commit); inp.addEventListener('keydown',function(e){ if(e.key==='Enter') inp.blur(); if(e.key==='Escape'){ done=true; render(); } }); }
+function openMemoEdit(body,t){ if(body.querySelector('.memo-area')) return; var mp=body.querySelector('.memo-preview'); if(mp) body.removeChild(mp); var area=document.createElement('textarea'); area.className='memo-area'; area.value=t.memo||''; area.placeholder='メモを入力… (Escで閉じる)'; body.appendChild(area); area.focus(); var done=false; function commit(){ if(done) return; done=true; var v=area.value.trim(); if(v!==(t.memo||'')){ t.memo=v; sync(function(){ return run('setMemo',t.id,v); }); } else { render(); } } area.addEventListener('blur',commit); area.addEventListener('keydown',function(e){ if(e.key==='Escape'){ done=true; render(); } }); }
+
+/* actions */
+function toggle(id){ var t=findTodo(id); if(!t) return; t.done=!t.done; render(); sync(function(){ return run('setDone',id,t.done); }); }
+function cyclePrio(id){ var t=findTodo(id); if(!t) return; t.priority=(Number(t.priority)+1)%4; render(); sync(function(){ return run('setPriority',id,t.priority); }); }
+function setDue(id,due){ var t=findTodo(id); if(!t) return; t.due=due||''; render(); sync(function(){ return run('setDue',id,t.due); }); }
+function removeLi(li,id){ li.classList.add('leaving'); setTimeout(function(){ todos=todos.filter(function(x){ return x.id!==id; }); render(); sync(function(){ return run('deleteTodo',id); }); },140); }
+function clearDone(){ var ids=todos.filter(function(t){ return t.done; }).map(function(t){ return t.id; }); todos=todos.filter(function(t){ return !t.done; }); render(); sync(function(){ return run('clearDone',ids); }); }
+
+/* bindings */
+$clearDone.onclick=clearDone;
+$viewTgl.onclick=function(){ viewMode=viewMode==='list'?'kanban':'list'; $viewTgl.textContent=viewMode==='kanban'?'⊞ カンバン':'☰ リスト'; $viewTgl.classList.toggle('active',viewMode==='kanban'); render(); };
+$groupTgl.onclick=function(){ groupMode=!groupMode; $groupTgl.setAttribute('aria-pressed',groupMode?'true':'false'); render(); };
+Array.prototype.forEach.call(document.querySelectorAll('.chip[data-filter]'),function(c){ c.onclick=function(){ filter=c.dataset.filter; document.querySelectorAll('.chip[data-filter]').forEach(function(x){ x.setAttribute('aria-pressed',x===c?'true':'false'); }); catFilter=null; render(); }; });
+Array.prototype.forEach.call(document.querySelectorAll('.chip-sort'),function(c){ c.onclick=function(){ sortMode=c.dataset.sort; document.querySelectorAll('.chip-sort').forEach(function(x){ x.setAttribute('aria-pressed',x===c?'true':'false'); }); render(); }; });
+
+var $menuBtn=$id('menuBtn'), $menuDropdown=$id('menuDropdown'), $menuToggle=$id('menuToggle');
+$menuBtn.onclick=function(e){ e.stopPropagation(); $menuDropdown.hidden=!$menuDropdown.hidden; };
+document.addEventListener('click',function(){ $menuDropdown.hidden=true; });
+$menuDropdown.addEventListener('click',function(e){ e.stopPropagation(); });
+$id('menuHideOldDone').onclick=function(){ hideOldDone=!hideOldDone; $menuToggle.classList.toggle('on',hideOldDone); render(); };
+
+document.addEventListener('mouseup',function(){
+  if(!boardDragCat) Array.prototype.forEach.call(document.querySelectorAll('.kanban-board'),function(b){ b.draggable=false; });
+});
+
+/* ログイン */
+$id('loginBtn').onclick=function(){
+  var btn=$id('loginBtn'), status=$id('loginStatus');
+  btn.disabled=true; btn.textContent='ログイン中…'; status.textContent=''; status.className='login-status';
+  ensureToken().then(fetchUserEmail).then(ensureSpreadsheet).then(function(){
+    $id('loginGate').hidden=true;
+    $id('userBadge').hidden=false; $id('userBadge').textContent=userEmail;
+    $id('menuLogout').hidden=false;
+    $count.textContent='読み込み中…';
+    sync(function(){ return run('getTodos'); });
+  }).catch(function(e){
+    btn.disabled=false; btn.textContent='Googleでログイン';
+    status.textContent='ログインに失敗したよ: '+((e&&e.message)||'もう一度試してみて');
+    status.className='login-status err';
+  });
+};
+$id('menuLogout').onclick=function(){
+  if(accessToken) google.accounts.oauth2.revoke(accessToken,function(){});
+  location.reload();
+};
+</script>
+</body>
+</html>
