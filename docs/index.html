@@ -367,7 +367,7 @@ function ensureToken(){
       accessToken=resp.access_token; tokenExpiresAt=Date.now()+(resp.expires_in||3600)*1000;
       resolve(accessToken);
     };
-    tokenClient.requestAccessToken({prompt:accessToken?'':'consent'});
+    tokenClient.requestAccessToken({prompt:''});
   });
 }
 
