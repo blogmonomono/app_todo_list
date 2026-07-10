@@ -336,7 +336,7 @@ var COLUMNS=['id','text','done','created','priority','due','category','sort','me
 var SHEET_NAME='todos';
 var SPREADSHEET_TITLE='タスク整理くんデータ';
 var SHEETS_BASE='https://sheets.googleapis.com/v4/spreadsheets/';
-var SCOPES='https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.email';
+var SCOPES='https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email';
 
 var tokenClient=null, accessToken=null, tokenExpiresAt=0;
 var spreadsheetId=null, sheetGid=0, rowMap={}, userEmail='';
